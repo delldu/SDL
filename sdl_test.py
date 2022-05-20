@@ -11,6 +11,7 @@ from copy import deepcopy
 from archs.sdl_arch import SDLNet
 from basicsr.metrics.psnr_ssim import calculate_psnr, calculate_ssim
 from basicsr.utils import FileClient, imfrombytes, img2tensor, tensor2img, imwrite
+import pdb
 
 def make_cit_dataset(path):
     clips_path = []
@@ -34,8 +35,13 @@ class SDLWrap(object):
         self.load_model(in_ch, key)
 
     def load_model(self, in_ch, key=None):
+        # in_ch = 6
+        # key = 'params'
+
         self.net = SDLNet(in_ch, 3, self.split)
         load_net = torch.load(self.model_path, map_location=lambda storage, loc: storage)
+        # load_net.keys() -- dict_keys(['params'])
+
         if key is not None: load_net = load_net[key]
         # remove unnecessary 'module.'
         for k, v in deepcopy(load_net).items():
@@ -111,14 +117,14 @@ class SDLWrap(object):
             img_t = tensor2img(img_t)
             imwrite(img_t[:h, :w], os.path.join(save_path, f'{j:02d}_sdl.png'))
 
-    def test_vfi_dir(self, in_path, save_path, num=1, copy_flag=True, ext='.png'):
+    def test_vfi_dir(self, in_path, save_path, num=1, copy_flag=True, ext='.jpg'):
         os.makedirs(save_path, exist_ok=True)
         files = sorted(glob.glob(os.path.join(in_path, '*' + ext)))
         num_frame = len(files)
 
         cur = 0 
         for idx in range(num_frame-1):
-            if idx%10==0: print(files[idx])
+            # if idx%10==0: print(files[idx])
             if copy_flag:
                 shutil.copyfile(files[idx], f'{save_path}/{cur:03d}{ext}')
                 cur += 1
@@ -144,6 +150,8 @@ class SDLWrap(object):
                     img_t = self.net(img_01, t)
                 img_t = tensor2img(img_t)
                 imwrite(img_t[:h, :w] , f'{save_path}/{cur:03d}{ext}')
+                print(f'{save_path}/{cur:03d}{ext}')
+
                 cur += 1
 
         if copy_flag:

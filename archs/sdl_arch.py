@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from basicsr.utils.registry import ARCH_REGISTRY
+import pdb
 
 class LateralBlock(nn.Module):
     def __init__(self, ch_in, ch_out):
@@ -55,33 +56,48 @@ class UpSamplingBlock(nn.Module):
 class GridNet(nn.Module):
     def __init__(self, in_chs, out_chs, grid_chs = [32, 64, 96], nrow=3, ncol=6):
         super(GridNet, self).__init__()
+        # in_chs = 32
+        # out_chs = 3
+        # grid_chs = [32, 64, 96]
+        # nrow = 3
+        # ncol = 6
 
         self.n_row = nrow
         self.n_col = ncol
         self.n_chs = grid_chs
         assert len(grid_chs) == self.n_row, 'should give num channels for each row (scale stream)'
 
-        self.lateral_init = LateralBlock(in_chs, self.n_chs[0])
+        self.lateral_init = LateralBlock(in_chs, self.n_chs[0]) # (32, 32)
         
         for r, n_ch in enumerate(self.n_chs):
-            for c in range(self.n_col-1):
+            # 0 32
+            # 1 64
+            # 2 96
+            for c in range(self.n_col-1): # range(0, 5)
                 setattr(self, f'lateral_{r}_{c}', LateralBlock(n_ch, n_ch))
 
         for r, (in_ch, out_ch) in enumerate(zip(self.n_chs[:-1], self.n_chs[1:])):
-            for c in range(int(self.n_col/2)):
+            # 0 32 64
+            # 1 64 96
+            for c in range(int(self.n_col/2)): # range(0, 3)
                 setattr(self, f'down_{r}_{c}', DownSamplingBlock(in_ch, out_ch))
 
         for r, (in_ch, out_ch) in enumerate(zip(self.n_chs[1:], self.n_chs[:-1])):
-            for c in range(int(self.n_col/2)):
+            # 0 64 32
+            # 1 96 64
+            for c in range(int(self.n_col/2)): # range(0, 3)
                 setattr(self, f'up_{r}_{c}', UpSamplingBlock(in_ch, out_ch))
                 
-        self.lateral_final = LateralBlock(self.n_chs[0], out_chs)
+        self.lateral_final = LateralBlock(self.n_chs[0], out_chs) # (32, 3)
+
+        # pdb.set_trace()
+
    
     def forward(self, x):
-        forward_func = getattr(self, f'forward_{self.n_row}{self.n_col}')
-        return forward_func(x) 
-                                    
-    def forward_36(self, x):
+        #     forward_func = getattr(self, f'forward_{self.n_row}{self.n_col}')
+        #     return forward_func(x) 
+                                        
+        # def forward_36(self, x):
         state_00 = self.lateral_init(x)
         state_10 = self.down_0_0(state_00)
         state_20 = self.down_1_0(state_10)
@@ -216,6 +232,7 @@ class up(nn.Module):
 class SDLNet(nn.Module):
     """
     SDLNet architecture
+    SDL -- Space Decoupled Learning
     """
 
     def __init__(self, num_in_ch, num_out_ch, split=0.5, num_feat=32, nrow=3, ncol=6):
@@ -246,8 +263,7 @@ class SDLNet(nn.Module):
         self.gridnet = GridNet(32, num_out_ch, nrow=nrow, ncol=ncol)
 
     def preforward(self, x, t):
-        t = t.view(-1, 1, 1, 1)
-
+        t = t.view(-1, 1, 1, 1) # ==>[1, 1, 1, 1]
         s1 = self.head(x)
         s2 = self.down1(s1)
         s3 = self.down2(s2)
@@ -265,7 +281,10 @@ class SDLNet(nn.Module):
         return x
 
     def forward(self, x, t):
+        # (Pdb) x.size() -- [1, 6, 480, 864]
+        # t.size() -- [1, 1], 0.5
         x_01 = self.preforward(x, t)
+
         '''
         idx_rvs = torch.LongTensor(range(-3, 3))
         x_rvs = x[:,idx_rvs]
@@ -273,6 +292,7 @@ class SDLNet(nn.Module):
          
         x = self.gridnet(torch.cat((x_01, x_10), 1))
         '''
+        # x_01.size() -- [1, 32, 480, 864]
         x = self.gridnet(x_01)
-        
+        # x.size() -- [1, 3, 480, 864]
         return x
